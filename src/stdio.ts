@@ -11,6 +11,7 @@ import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createBrainServer } from "./server.js";
+import { SupabaseAdapter, PostgresAdapter } from "./db.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: resolve(__dirname, "../.env") });
@@ -21,9 +22,18 @@ function requireEnv(key: string): string {
   return val;
 }
 
+const backend = process.env["DB_BACKEND"] ?? "supabase";
+
+const db =
+  backend === "postgres"
+    ? new PostgresAdapter(requireEnv("DATABASE_URL"))
+    : new SupabaseAdapter(
+        requireEnv("SUPABASE_URL"),
+        requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
+      );
+
 const config = {
-  supabaseUrl: requireEnv("SUPABASE_URL"),
-  supabaseKey: requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
+  db,
   openrouterApiKey: requireEnv("OPENROUTER_API_KEY"),
   embeddingModel: process.env["EMBEDDING_MODEL"],
   embeddingDimensions: process.env["EMBEDDING_DIMENSIONS"]

@@ -1,6 +1,6 @@
 // ─── Cursor Chat Indexer ──────────────────────────────────────────────────────
 // Reads Cursor agent transcript JSONL files and indexes them as searchable
-// memories in the Open Brain (Supabase brain_memories table).
+// memories in the Open Brain (brain_memories table).
 //
 // Each transcript dir contains: <uuid>/<uuid>.jsonl
 // Each line in the JSONL is: { role: "user" | "assistant", message: { content: [...] } }
@@ -10,7 +10,7 @@
 
 import { readdir, readFile, stat } from "fs/promises";
 import { join } from "path";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbAdapter } from "./db.js";
 import {
   generateEmbedding,
   vectorLiteral,
@@ -62,14 +62,10 @@ function sanitize(text: string, maxLen: number): string {
 
 // ─── Deduplication ───────────────────────────────────────────────────────────
 
-async function getIndexedIds(supabase: SupabaseClient): Promise<Set<string>> {
-  const { data } = await supabase
-    .from("brain_memories")
-    .select("source_metadata")
-    .eq("source", WORK_HISTORY_SOURCE);
-
+async function getIndexedIds(db: DbAdapter): Promise<Set<string>> {
+  const rows = await db.getWorkHistoryMetadata();
   const ids = new Set<string>();
-  for (const row of data ?? []) {
+  for (const row of rows) {
     const meta = row.source_metadata as Record<string, string>;
     if (meta?.transcript_id) ids.add(meta.transcript_id);
   }
@@ -80,7 +76,7 @@ async function getIndexedIds(supabase: SupabaseClient): Promise<Set<string>> {
 
 export async function indexCursorChats(
   transcriptsDir: string,
-  supabase: SupabaseClient,
+  db: DbAdapter,
   embeddingConfig: EmbeddingConfig,
   options: { force?: boolean; limit?: number } = {},
 ): Promise<IndexResult> {
@@ -88,7 +84,7 @@ export async function indexCursorChats(
 
   const alreadyIndexed = options.force
     ? new Set<string>()
-    : await getIndexedIds(supabase);
+    : await getIndexedIds(db);
 
   let dirs: string[];
   try {
@@ -157,7 +153,7 @@ export async function indexCursorChats(
       const embedding = await generateEmbedding(content, embeddingConfig);
       const vector = vectorLiteral(embedding);
 
-      const { error } = await supabase.from("brain_memories").insert({
+      await db.insertMemory({
         content,
         embedding: vector,
         source: WORK_HISTORY_SOURCE,
@@ -170,11 +166,7 @@ export async function indexCursorChats(
         },
       });
 
-      if (error) {
-        result.errors.push(`${dir}: ${error.message}`);
-      } else {
-        result.indexed++;
-      }
+      result.indexed++;
     } catch (err) {
       result.errors.push(
         `${dir}: ${err instanceof Error ? err.message : String(err)}`,

@@ -4,13 +4,12 @@
 //
 // Tools:
 //   search_brain  — semantic similarity search
-//   add_memory    — ingest new knowledge (calls process-memory edge function)
+//   add_memory    — ingest new knowledge
 //   recall        — filtered list retrieval (no embedding needed)
 //   forget        — delete a memory by id
-//   brain_stats   — counts and source_metadata about the knowledge base
+//   brain_stats   — counts and source breakdown of the knowledge base
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { generateEmbedding, vectorLiteral } from "./embeddings.js";
 import { addToolshedTools, indexToolRegistry } from "./toolshed.js";
@@ -19,6 +18,7 @@ import {
   searchTranscriptsRaw,
   WORK_HISTORY_SOURCE,
 } from "./chat-indexer.js";
+import type { DbAdapter, BrainMemory } from "./db.js";
 import { readFile } from "fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -27,24 +27,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ─── Config (resolved from environment) ──────────────────────────────
 export interface ServerConfig {
-  supabaseUrl: string;
-  supabaseKey: string;
+  db: DbAdapter;
   openrouterApiKey: string;
   embeddingModel?: string;
   embeddingDimensions?: number;
   /** Path to Cursor agent-transcripts directory for work history indexing */
   cursorTranscriptsDir?: string;
-}
-
-// ─── Brain memory row shape ────────────────────────────────────────────
-interface BrainMemory {
-  id: string;
-  content: string;
-  source: string;
-  source_metadata: Record<string, unknown>;
-  tags: string[];
-  created_at: string;
-  similarity?: number;
 }
 
 function formatMemory(m: BrainMemory, index?: number): string {
@@ -58,10 +46,7 @@ function formatMemory(m: BrainMemory, index?: number): string {
 
 // ─── Build and return the configured MCP server instance ──────────────
 export function createBrainServer(config: ServerConfig): McpServer {
-  const supabase: SupabaseClient = createClient(
-    config.supabaseUrl,
-    config.supabaseKey,
-  );
+  const { db } = config;
 
   const embeddingConfig = {
     apiKey: config.openrouterApiKey,
@@ -107,17 +92,7 @@ export function createBrainServer(config: ServerConfig): McpServer {
         const embedding = await generateEmbedding(query, embeddingConfig);
         const vector = vectorLiteral(embedding);
 
-        const { data, error } = await supabase.rpc("match_memories", {
-          query_embedding: vector,
-          match_threshold: threshold,
-          match_count: limit,
-          filter_source: source ?? null,
-          filter_tags: null,
-        });
-
-        if (error) throw error;
-
-        const memories = (data as BrainMemory[]) ?? [];
+        const memories = await db.searchMemories(vector, threshold, limit, source);
 
         if (memories.length === 0) {
           return {
@@ -177,25 +152,19 @@ export function createBrainServer(config: ServerConfig): McpServer {
         const embedding = await generateEmbedding(content, embeddingConfig);
         const vector = vectorLiteral(embedding);
 
-        const { data, error } = await supabase
-          .from("brain_memories")
-          .insert({
-            content,
-            embedding: vector,
-            source,
-            tags,
-            source_metadata,
-          })
-          .select("id, tags")
-          .single();
-
-        if (error) throw error;
+        const row = await db.insertMemory({
+          content,
+          embedding: vector,
+          source,
+          tags,
+          source_metadata,
+        });
 
         return {
           content: [
             {
               type: "text",
-              text: `Stored memory (id: ${data.id})\ntags: ${(data.tags as string[]).join(", ") || "none"}`,
+              text: `Stored memory (id: ${row.id})\ntags: ${row.tags.join(", ") || "none"}`,
             },
           ],
         };
@@ -237,20 +206,7 @@ export function createBrainServer(config: ServerConfig): McpServer {
     },
     async ({ source, tags, since, limit }) => {
       try {
-        let query = supabase
-          .from("brain_memories")
-          .select("id, content, source, tags, created_at")
-          .order("created_at", { ascending: false })
-          .limit(limit ?? 20);
-
-        if (source) query = query.eq("source", source);
-        if (tags && tags.length > 0) query = query.overlaps("tags", tags);
-        if (since) query = query.gte("created_at", since);
-
-        const { data, error } = await query;
-        if (error) throw error;
-
-        const memories = (data as BrainMemory[]) ?? [];
+        const memories = await db.recallMemories({ source, tags, since, limit: limit ?? 20 });
 
         if (memories.length === 0) {
           return {
@@ -287,13 +243,7 @@ export function createBrainServer(config: ServerConfig): McpServer {
     },
     async ({ id }) => {
       try {
-        const { error } = await supabase
-          .from("brain_memories")
-          .delete()
-          .eq("id", id);
-
-        if (error) throw error;
-
+        await db.deleteMemory(id);
         return {
           content: [{ type: "text", text: `Memory ${id} deleted.` }],
         };
@@ -314,28 +264,12 @@ export function createBrainServer(config: ServerConfig): McpServer {
     {},
     async () => {
       try {
-        const { data: stats, error: statsError } = await supabase
-          .from("brain_stats")
-          .select("*")
-          .single();
+        const [stats, bySource] = await Promise.all([
+          db.getStats(),
+          db.getSourceCounts(),
+        ]);
 
-        if (statsError) throw statsError;
-
-        const { data: bySource, error: sourceError } = await supabase
-          .from("brain_memories")
-          .select("source")
-          .then(({ data, error }) => {
-            if (error) return { data: null, error };
-            const counts: Record<string, number> = {};
-            for (const row of data ?? []) {
-              counts[row.source] = (counts[row.source] ?? 0) + 1;
-            }
-            return { data: counts, error: null };
-          });
-
-        if (sourceError) throw sourceError;
-
-        const sourceBreakdown = Object.entries(bySource ?? {})
+        const sourceBreakdown = Object.entries(bySource)
           .sort((a, b) => b[1] - a[1])
           .map(([src, count]) => `  ${src}: ${count}`)
           .join("\n");
@@ -403,7 +337,7 @@ export function createBrainServer(config: ServerConfig): McpServer {
       try {
         const result = await indexCursorChats(
           transcriptsDir,
-          supabase,
+          db,
           embeddingConfig,
           { force: force ?? false, limit },
         );
@@ -501,7 +435,7 @@ export function createBrainServer(config: ServerConfig): McpServer {
   );
 
   // ── Toolshed: dynamic tool discovery ──────────────────────────────
-  addToolshedTools(server, supabase, config);
+  addToolshedTools(server, db, config);
 
   // Index tool registry on startup (fire-and-forget, idempotent)
   const registryPath = join(__dirname, "../../tool-registry.json");
@@ -514,7 +448,7 @@ export function createBrainServer(config: ServerConfig): McpServer {
         category: string;
         tags: string[];
       }>;
-      return indexToolRegistry(registry, supabase, embeddingConfig);
+      return indexToolRegistry(registry, db, embeddingConfig);
     })
     .catch((err) => {
       console.warn("[Toolshed] Registry indexing skipped:", err instanceof Error ? err.message : err);

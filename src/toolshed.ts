@@ -10,7 +10,7 @@
 // a semantic similarity search and returns matching tool entries.
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbAdapter } from "./db.js";
 import { z } from "zod";
 import { generateEmbedding, vectorLiteral } from "./embeddings.js";
 import type { ServerConfig } from "./server.js";
@@ -31,17 +31,12 @@ interface ToolRegistryEntry {
 
 export async function indexToolRegistry(
   registry: ToolRegistryEntry[],
-  supabase: SupabaseClient,
+  db: DbAdapter,
   embeddingConfig: Parameters<typeof generateEmbedding>[1],
 ): Promise<void> {
-  // Check how many toolshed entries already exist
-  const { count } = await supabase
-    .from("brain_memories")
-    .select("*", { count: "exact", head: true })
-    .eq("source", "toolshed");
+  const count = await db.countBySource("toolshed");
 
-  if ((count ?? 0) >= registry.length) {
-    // All tools already indexed
+  if (count >= registry.length) {
     return;
   }
 
@@ -60,23 +55,17 @@ export async function indexToolRegistry(
       const embedding = await generateEmbedding(content, embeddingConfig);
       const vector = vectorLiteral(embedding);
 
-      await supabase.from("brain_memories").upsert(
-        {
-          content,
-          embedding: vector,
-          source: "toolshed",
-          tags: ["toolshed", tool.category, ...tool.tags],
-          source_metadata: {
-            tool_name: tool.name,
-            server: tool.server,
-            category: tool.category,
-          },
+      await db.upsertMemory({
+        content,
+        embedding: vector,
+        source: "toolshed",
+        tags: ["toolshed", tool.category, ...tool.tags],
+        source_metadata: {
+          tool_name: tool.name,
+          server: tool.server,
+          category: tool.category,
         },
-        {
-          onConflict: "source,content",
-          ignoreDuplicates: true,
-        },
-      );
+      });
     } catch (err) {
       console.warn(`[Toolshed] Failed to index tool ${tool.name}:`, err);
     }
@@ -89,7 +78,7 @@ export async function indexToolRegistry(
 
 export function addToolshedTools(
   server: McpServer,
-  supabase: SupabaseClient,
+  db: DbAdapter,
   config: ServerConfig,
 ): void {
   const embeddingConfig = {
@@ -128,25 +117,14 @@ export function addToolshedTools(
         const embedding = await generateEmbedding(query, embeddingConfig);
         const vector = vectorLiteral(embedding);
 
-        interface MatchResult {
-          content: string;
-          source_metadata: Record<string, string>;
-          tags: string[];
-          similarity: number;
-        }
+        const tools = await db.searchMemories(
+          vector,
+          0.2,
+          limit ?? 5,
+          "toolshed",
+          category ? [category] : undefined,
+        );
 
-        let rpcCall = supabase.rpc("match_memories", {
-          query_embedding: vector,
-          match_threshold: 0.2,
-          match_count: limit ?? 5,
-          filter_source: "toolshed",
-          filter_tags: category ? [category] : null,
-        });
-
-        const { data, error } = await rpcCall;
-        if (error) throw error;
-
-        const tools = (data as MatchResult[]) ?? [];
         if (tools.length === 0) {
           return {
             content: [
@@ -162,7 +140,7 @@ export function addToolshedTools(
           `${tools.length} tool(s) matching "${query}":`,
           "",
           ...tools.map((t, i) => {
-            const meta = t.source_metadata;
+            const meta = t.source_metadata as Record<string, string>;
             return [
               `[${i + 1}] ${meta?.tool_name ?? "unknown"} (server: ${meta?.server ?? "unknown"})`,
               `    ${t.content.split("\n").find((l) => l.startsWith("Description:"))?.replace("Description: ", "") ?? ""}`,
