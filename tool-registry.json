@@ -1,0 +1,163 @@
+[
+  {
+    "name": "search_brain",
+    "server": "open-brain",
+    "description": "Search personal knowledge base by meaning using semantic similarity",
+    "category": "memory",
+    "tags": ["memory", "search", "recall", "knowledge", "semantic"]
+  },
+  {
+    "name": "add_memory",
+    "server": "open-brain",
+    "description": "Add new knowledge to the personal brain with embeddings for future retrieval",
+    "category": "memory",
+    "tags": ["memory", "store", "learn", "save"]
+  },
+  {
+    "name": "recall",
+    "server": "open-brain",
+    "description": "List memories with optional filtering by source, tags, or date",
+    "category": "memory",
+    "tags": ["memory", "list", "filter", "retrieve"]
+  },
+  {
+    "name": "forget",
+    "server": "open-brain",
+    "description": "Delete a memory from the brain by its UUID",
+    "category": "memory",
+    "tags": ["memory", "delete", "remove"]
+  },
+  {
+    "name": "brain_stats",
+    "server": "open-brain",
+    "description": "Get statistics about the knowledge base: total memories, sources breakdown",
+    "category": "memory",
+    "tags": ["memory", "stats", "analytics"]
+  },
+  {
+    "name": "create_file",
+    "server": "developer",
+    "description": "Create or overwrite a file with the specified content",
+    "category": "filesystem",
+    "tags": ["file", "write", "create", "filesystem"]
+  },
+  {
+    "name": "read_file",
+    "server": "developer",
+    "description": "Read the contents of a file at the given path",
+    "category": "filesystem",
+    "tags": ["file", "read", "filesystem"]
+  },
+  {
+    "name": "list_directory",
+    "server": "developer",
+    "description": "List files and directories at a given path",
+    "category": "filesystem",
+    "tags": ["file", "list", "directory", "filesystem"]
+  },
+  {
+    "name": "run_shell_command",
+    "server": "developer",
+    "description": "Execute a shell command and return stdout/stderr",
+    "category": "execution",
+    "tags": ["shell", "command", "execute", "run", "terminal"]
+  },
+  {
+    "name": "search_files",
+    "server": "developer",
+    "description": "Search for text patterns across files in a directory",
+    "category": "filesystem",
+    "tags": ["search", "grep", "find", "code", "filesystem"]
+  },
+  {
+    "name": "git_status",
+    "server": "github",
+    "description": "Get the git status of the current repository",
+    "category": "git",
+    "tags": ["git", "status", "changes", "repository"]
+  },
+  {
+    "name": "git_diff",
+    "server": "github",
+    "description": "Show changes in the working tree or between commits",
+    "category": "git",
+    "tags": ["git", "diff", "changes", "compare"]
+  },
+  {
+    "name": "git_commit",
+    "server": "github",
+    "description": "Stage files and create a git commit",
+    "category": "git",
+    "tags": ["git", "commit", "save", "version"]
+  },
+  {
+    "name": "create_pull_request",
+    "server": "github",
+    "description": "Create a GitHub pull request from the current branch",
+    "category": "github",
+    "tags": ["github", "pr", "pull-request", "review"]
+  },
+  {
+    "name": "list_issues",
+    "server": "github",
+    "description": "List GitHub issues for a repository",
+    "category": "github",
+    "tags": ["github", "issues", "tasks", "bugs"]
+  },
+  {
+    "name": "create_issue",
+    "server": "github",
+    "description": "Create a new GitHub issue",
+    "category": "github",
+    "tags": ["github", "issue", "bug", "feature", "task"]
+  },
+  {
+    "name": "run_test_suite",
+    "server": "developer",
+    "description": "Run the project test suite and return results",
+    "category": "testing",
+    "tags": ["test", "testing", "ci", "quality", "jest", "vitest"]
+  },
+  {
+    "name": "run_linter",
+    "server": "developer",
+    "description": "Run ESLint on the project and return lint errors",
+    "category": "quality",
+    "tags": ["lint", "eslint", "quality", "code-style"]
+  },
+  {
+    "name": "type_check",
+    "server": "developer",
+    "description": "Run TypeScript type checking with tsc --noEmit",
+    "category": "quality",
+    "tags": ["typescript", "types", "tsc", "typecheck", "quality"]
+  },
+  {
+    "name": "search_web",
+    "server": "web",
+    "description": "Search the web for information about a topic",
+    "category": "research",
+    "tags": ["web", "search", "research", "internet", "documentation"]
+  },
+  {
+    "name": "fetch_url",
+    "server": "web",
+    "description": "Fetch and parse the content of a URL",
+    "category": "research",
+    "tags": ["web", "fetch", "http", "url", "scrape"]
+  },
+  {
+    "name": "supabase_query",
+    "server": "supabase",
+    "description": "Execute a SQL query against the Supabase PostgreSQL database",
+    "category": "database",
+    "tags": ["database", "sql", "supabase", "postgres", "query"]
+  },
+  {
+    "name": "supabase_insert",
+    "server": "supabase",
+    "description": "Insert rows into a Supabase table",
+    "category": "database",
+    "tags": ["database", "insert", "supabase", "write"]
+  }
+]

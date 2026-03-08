@@ -1,0 +1,25 @@
+{
+  "name": "gravityclaw-open-brain-mcp",
+  "version": "1.0.0",
+  "description": "GravityClaw Open Brain — MCP server for semantic personal knowledge base",
+  "type": "module",
+  "scripts": {
+    "dev:stdio": "tsx src/stdio.ts",
+    "dev:http": "tsx src/http.ts",
+    "build": "tsc",
+    "start:stdio": "node dist/stdio.js",
+    "start:http": "node dist/http.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "@supabase/supabase-js": "^2.49.4",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.9",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
